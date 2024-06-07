@@ -18,7 +18,7 @@ namespace jp.ootr.UdonLZ4
 
     public class LZ4CallbackReceiver : UdonSharpBehaviour
     {
-        public void OnLZ4Decompress(byte[] data){}
-        public void OnLZ4DecompressError(DecompressError error){}
+        public virtual void OnLZ4Decompress(byte[] data){}
+        public virtual void OnLZ4DecompressError(DecompressError error){}
     }
 }

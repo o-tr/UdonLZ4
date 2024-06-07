@@ -1,5 +1,4 @@
 using System;
-using jp.ootr.common;
 using UdonSharp;
 using UnityEngine;
 
