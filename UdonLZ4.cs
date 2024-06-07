@@ -23,7 +23,7 @@ namespace jp.ootr.UdonLZ4
         private const int BS_MASK = 7;
         private readonly long[] _bsMap = new long[]{0,0,0,0,0x10000,0x40000,0x100000,0x400000};
 
-        private const float MaxFrameTime = 0.01f;
+        private const float MaxFrameTime = 0.005f;
         
         private LZ4CallbackReceiver[] _lz4CallbackReceivers = new LZ4CallbackReceiver[0];
         private byte[][] _lz4Buffer = new byte[0][];
@@ -109,6 +109,7 @@ namespace jp.ootr.UdonLZ4
             uint compSize = ReadU32(_lz4Buffer[0], ref _lz4SIndex);
             if (compSize == 0)
             {
+                Debug.Log($"export: {_lz4DIndex} {_lz4Dist.Length}");
                 if (_lz4DIndex == _lz4Dist.Length)
                 {
                     var device = _lz4CallbackReceivers[0];
@@ -220,6 +221,7 @@ namespace jp.ootr.UdonLZ4
             hasContentSize = (descriptor & FD_CONTENT_SIZE) != 0;
             hasDictId = (descriptor & FD_DICT_ID) != 0;
 
+            // Read block size
             var bsIdx = (src[sIndex++] >> BS_SHIFT) & BS_MASK;
             maxBlockSize = _bsMap[bsIdx];
             if (maxBlockSize == 0)
@@ -284,30 +286,32 @@ namespace jp.ootr.UdonLZ4
                 {
                     break;
                 }
-                
-                if ((compSize & BS_UNCOMPRESSED) != 0)
-                {
-                    compSize &= ~BS_UNCOMPRESSED;
-                    
-                    Array.Copy(src, sIndex, dist, dIndex, compSize);
-                    sIndex += compSize;
-                    dIndex += compSize;
-                }
-                else
-                {
-                    DecompressBlock(src, dist, ref sIndex, compSize,ref dIndex);
-                }
                 if (useBlockSum)
                 {
                     // TODO: read block checksum
                     sIndex += 4;
+                }
+                
+                if ((compSize & BS_UNCOMPRESSED) != 0)
+                {
+                    compSize &= ~BS_UNCOMPRESSED;
+
+                    for (int i = 0; i < compSize; i++)
+                    {
+                        dist[dIndex++] = src[sIndex++];
+                    }
+                }
+                else
+                {
+                    dIndex = DecompressBlock(src, dist, sIndex, compSize,dIndex);
+                    sIndex += compSize;
                 }
             }
 
             return dIndex;
         }
 
-        private void DecompressBlock(byte[] src, byte[] dst,ref long sIndex, long sLength, ref long dIndex)
+        private long DecompressBlock(byte[] src, byte[] dst,long sIndex, long sLength, long dIndex)
         {
             long sEnd = sIndex + sLength;
             while (sIndex < sEnd)
@@ -317,6 +321,8 @@ namespace jp.ootr.UdonLZ4
                     break;
                 }
             }
+
+            return dIndex;
         }
 
         private bool DecompressBlockInternal(byte[] src, byte[] dst, ref long sIndex, ref long dIndex, long sEnd)
@@ -337,9 +343,10 @@ namespace jp.ootr.UdonLZ4
                     }
                 }
 
-                Array.Copy(src, sIndex, dst, dIndex, literalCount);
-                sIndex += literalCount;
-                dIndex += literalCount;
+                for (int i = 0; i < literalCount; i++)
+                {
+                    dst[dIndex++] = src[sIndex++];
+                }
             }
 
             if (sIndex >= sEnd)
@@ -372,8 +379,10 @@ namespace jp.ootr.UdonLZ4
             }
             else
             {
-                Array.Copy(dst, dIndex - mOffset, dst, dIndex, mLength);
-                dIndex += mLength;
+                for (long i = dIndex - mOffset, n = i + mLength; i < n;)
+                {
+                    dst[dIndex++] = (byte)(dst[i++] | 0);
+                }
             }
 
             return false;
